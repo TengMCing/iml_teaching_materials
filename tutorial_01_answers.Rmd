@@ -1,0 +1,154 @@
+---
+title: "Tutorial 01 answers"
+output: pdf_document
+author: Patrick Li
+date: "2023-02-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+# Exercise 1A: Some mathematical derivations
+
+a. Show that $\sum_{i=1}^{n}(x_{i1} - \bar{x}_1)^2 = \sum_{i=1}^{n}x_{i1}^2 - n\bar{x}_1^2$
+
+
+
+\begin{align*}
+\sum_{i=1}^{n}(x_{i1} - \bar{x}_1)^2 &= \sum_{i=1}^{n}(x_{i1}^2 + \bar{x}_1^2 - 2x_{i1}\bar{x}_1) \\
+                                     &= \sum_{i=1}^{n}x_{i1}^2 + \sum_{i=1}^{n}\bar{x}_1^2 - \sum_{i=1}^{n}2x_{i1}\bar{x}_1 \\
+                                     &= \sum_{i=1}^{n}x_{i1}^2 + n\bar{x}_1^2 - \sum_{i=1}^{n}2x_{i1}\bar{x}_1 \\
+                                     &= \sum_{i=1}^{n}x_{i1}^2 + n\bar{x}_1^2 - 2\bar{x}_1\sum_{i=1}^{n}x_{i1} \\
+                                     &= \sum_{i=1}^{n}x_{i1}^2 + n\bar{x}_1^2 - 2\bar{x}_1n\bar{x}_{1} \\
+                                     &= \sum_{i=1}^{n}x_{i1}^2 - n\bar{x}_1^2. \\
+\end{align*}
+
+
+Consider the regression $y_i = \beta_1x_{i1} + e_i$, where the RSS is $\sum_{i=1}^{n}e_i^2 = \sum_{i=1}^{n}(y_i - \beta_1x_{i1})^2$.
+
+b. Show that $\sum_{i=1}^{n}e_i^2 = \sum_{i=1}^{n}y_i^2 - 2\beta_1\sum_{i=1}^{n}y_ix_{i1} + \beta_1^2\sum_{i=1}^{n}x_{i1}^2$
+
+
+\begin{align*}
+\sum_{i=1}^{n}e_i^2 &= \sum_{i=1}^{n}(y_i - \beta_1x_{i1})^2 \\
+                    &= \sum_{i=1}^{n}(y_i^2 + \beta_1^2x_{i1}^2 - 2y_i\beta_1x_{i1}) \\
+                    &= \sum_{i=1}^{n}y_i^2 + \sum_{i=1}^{n}\beta_1^2x_{i1}^2 - \sum_{i=1}^{n}2y_i\beta_1x_{i1} \\
+                    &= \sum_{i=1}^{n}y_i^2 + \beta_1^2\sum_{i=1}^{n}x_{i1}^2 - 2\beta_1\sum_{i=1}^{n}y_ix_{i1}. \\
+\end{align*}
+
+
+c. Using your answers to exercise 1A a. compute an expression for the derivative $\frac{\partial}{\partial\beta_1}\sum_{i=1}^{n}e_i^2$.
+
+
+\begin{align*}
+\frac{\partial}{\partial\beta_1}\sum_{i=1}^{n}e_i^2 &= \frac{\partial}{\partial\beta_1}\left(\sum_{i=1}^{n}y_i^2 - 2\beta_1\sum_{i=1}^{n}y_ix_{i1} + \beta_1^2\sum_{i=1}^{n}x_{i1}^2\right) \\
+                                                    &= -2\sum_{i=1}^{n}y_ix_{i1} + 2\beta_1\sum_{i=1}^{n}x_{i1}^2 \\
+                                                    &= 2\left(\beta_1\sum_{i=1}^{n}x_{i1}^2 - \sum_{i=1}^{n}y_ix_{i1}\right).
+\end{align*}
+
+
+d. Find the parameter value $\hat{\beta}_1$ such that $\frac{\partial}{\partial\hat{\beta}_1}\sum_{i=1}^{n}e_i^2 = 0$.
+
+
+Let 
+
+
+\begin{align*}
+\frac{\partial}{\partial\hat{\beta}_1}\sum_{i=1}^{n}e_i^2 &= 0 \\
+2\left(\hat{\beta}_1\sum_{i=1}^{n}x_{i1}^2 - \sum_{i=1}^{n}y_ix_{i1}\right) &= 0 \\
+\hat{\beta}_1\sum_{i=1}^{n}x_{i1}^2 &= \sum_{i=1}^{n}y_ix_{i1} \\
+\hat{\beta}_1 &= \frac{\sum_{i=1}^{n}y_ix_{i1}}{\sum_{i=1}^{n}x_{i1}^2}.
+\end{align*}
+
+
+Since $Cov(x_1, y) = (\sum_{i=1}^{n}x_{i1}y_i - n\bar{x}_{1}\bar{y})/(n-1)$ and $Var(x_1) = \sum_{i=1}^{n}(x_{i1} - \bar{x}_1)^2/(n-1) = (\sum_{i=1}^{n}x_{i1}^2 - n\bar{x}_1^2)/(n-1)$, $\hat{\beta}_1$ can also be written as
+
+
+\begin{align*}
+\hat{\beta}_1 &= \frac{\sum_{i=1}^{n}y_ix_{i1}}{\sum_{i=1}^{n}x_{i1}^2 - n\bar{x}_1^2 + n\bar{x}_1^2} \\
+              &= \frac{\sum_{i=1}^{n}y_ix_{i1}}{\sum_{i=1}^{n}(x_{i1}^2 - \bar{x}_1)^2 + n\bar{x}_1^2} \\
+              &= \frac{\sum_{i=1}^{n}y_ix_{i1}}{(n-1)Var(x_1) + n\bar{x}_1^2} \\
+              &= \frac{\sum_{i=1}^{n}y_ix_{i1} - n\bar{x}_{1}\bar{y} + n\bar{x}_{1}\bar{y}}{(n-1)Var(x_1) + n\bar{x}_1^2} \\
+              &= \frac{(n-1)Cov(x_1, y) + n\bar{x}_{1}\bar{y}}{(n-1)Var(x_1) + n\bar{x}_1^2} \\
+              &= \frac{Cov(x_1, y) + \frac{n}{n-1}\bar{x}_{1}\bar{y}}{Var(x_1) + \frac{n}{n-1}\bar{x}_1^2}.
+\end{align*}
+
+
+# Exercise 1B: Predicting from linear models
+
+The nrc data contains information collected on Statistics graduate programs in the USA.
+There are several ranking variables, and indicators of the departments’ describing research,
+student and diversity, summarising many individual variables such as number of
+publications, student entrance scores and demographics. You can learn more about this data
+here (https://en.wikipedia.org/wiki/United_States_National_Research_Council_rankings).
+
+Fit a model for `rank` against indicators of `research`.
+
+a. Load the libraries to complete the exercises.
+
+```{r}
+# Load libraries
+library(tidyverse)
+library(broom)
+library(dotwhisker)
+```
+
+b. Read the data, simplify the names and select the relevant variables. You will want
+
+`rank` = `R.Rankings.5th.Percentile`,
+
+`research` = `Research.Activity.5th.Percentile`,
+
+`student` = `Student.Support.Outcomes.5th.Percentile` and
+
+`diversity` = `Diversity.5th.Percentile`.
+
+```{r}
+# Read the data
+nrc <- read_csv("https://emitanaka.org/iml/data/nrc.csv") %>%
+  # Simplify names of and select variables to use
+  select(rank = R.Rankings.5th.Percentile,
+         research = Research.Activity.5th.Percentile,
+         student = Student.Support.Outcomes.5th.Percentile,
+         diversity = Diversity.5th.Percentile) 
+```
+
+c. Make a plot of the observed response against predictors. What do you learn about the
+relationship between these variables?
+
+```{r}
+GGally::ggpairs(nrc)
+```
+
+d. Fit the model using a least squares method. The formula is written on the form `y ~ x`
+where `y` is the name of the response and `x` is the name of the predictors. The names
+used in the formula should match the names of the variables in the data set passed to
+data.
+
+
+```{r}
+mod <- lm(rank ~ research + student + diversity, data = nrc)
+summary(mod)
+```
+
+e. Report the coefficients of the model fit. We can use packages from the broom package to
+extract key information out of the model objects in tidy formats. The tidy() function
+returns the parameter estimates of a `lm` object. Explain the relationship between the
+predictors and the response variable. Is the interpretation of `research` , "the higher the
+value of research indicates higher value of `rank`"? This doesn’t make sense, why?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
