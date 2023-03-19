@@ -1,0 +1,325 @@
+---
+title: "Tutorial 3"
+format: 
+  html:
+    code-fold: false
+    toc: true
+    embed-resources: true
+editor: visual
+---
+
+```{r}
+knitr::opts_chunk$set(
+  message = FALSE, 
+  warning = FALSE, 
+  echo = TRUE)
+```
+
+# Exercise 3A
+
+## Why lasso regression shrink coefficients to $0$?  
+
+Please check ISLR page 244 and 245.
+
+> Since ridge regression has a circular constraint with no sharp points, this intersection will not generally occur on an axis, and so the ridge regression coefficient estimates will be exclusively non-zero. However, the lasso constraint has corners at each of the axes, and so the ellipse will often intersect the constraint region at an axis. When this occurs, one of the coefficients will equal zero. In higher dimensions, many of the coefficient estimates may equal zero simultaneously.
+
+# Exercise 3B
+
+My code may differ from the solution due to the personal preference of coding style. 
+
+## a.
+
+Categorical variables need to be transformed to dummy variables as `glmnet` does not work well with them.
+
+```{r}
+library(tidyverse)
+hitters <- ISLR::Hitters %>%
+  rownames_to_column("name") %>% 
+  drop_na() %>%
+  
+  # The categorical variables in the data set are League, Division and NewLeague.
+  mutate(LeagueA = ifelse(League == 'A', 1 , 0), 
+         DivisionE = ifelse(Division == 'E', 1, 0), 
+         NewLeagueA = ifelse(NewLeague == 'A', 1, 0)) %>% 
+  select(-c(League, Division, NewLeague)) %>%
+  
+  # Replace variable names with lower cases letters
+  # This is an immediately invoked function
+  (function(dat) {
+    cap_name <- names(dat)
+    
+    # Capture any upper case letter at the beginning and turn it into lower case
+    lower_name <- gsub("^([A-Z])", "\\L\\1", perl = TRUE, cap_name)
+    
+    # Capture any upper case letter and turn it into lower case
+    # with a "_" at front
+    lower_name <- gsub("([A-Z])", "_\\L\\1", perl = TRUE, lower_name)
+    
+    # Replace variable names
+    names(dat) <- lower_name
+    return(dat)
+  })(.)
+```
+
+## c.
+
+Add a new variable.
+
+```{r}
+hitters <- mutate(hitters, log_salary = log10(salary)) %>%
+  select(-salary)
+```
+
+## d.
+
+Split the data.
+
+```{r}
+set.seed(777)
+library(rsample)
+hitters_split <- initial_split(hitters, prop = 3/4)
+hitters_train <- training(hitters_split)
+hitters_test <- testing(hitters_split)
+```
+
+## e.
+
+Fit the lasso model.
+
+```{r}
+library(glmnet)
+lasso_mod <- glmnet(x = hitters_train %>%
+                      select(-log_salary, -name),
+                    y = hitters_train$log_salary,
+                    alpha = 1,
+                    lambda = 10 ^ seq(-10, 0, length.out = 50))
+```
+
+Here I use my own code to process the coefficients. It is pretty much the same as `broom::tidy()`.
+
+```{r}
+lasso_estimate <- coef(lasso_mod) %>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  pivot_longer(-rowname, names_to = "lambda", values_to = "estimate") %>%
+  mutate(lambda = as.integer(gsub("s", "", lambda)) + 1) %>%
+  mutate(lambda = lasso_mod$lambda[lambda]) %>%
+  rename(term = rowname)
+  
+lasso_estimate %>%
+  filter(term %in% c("years", "hm_run", "league_a", "walks", "errors", "hits")) %>%
+  ggplot() +
+  geom_line(aes(lambda, estimate, col = term)) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  scale_x_log10() +
+  theme_light() +
+  xlab(quote(lambda)) +
+  ylab("Standardised coefficients")
+```
+
+## f.
+
+I intentionally break down the long function into smaller functions. And hope it makes more sense.
+
+```{r}
+library(yardstick)
+
+# This returns the x data frame.
+# dat: A data frame.
+# y_name: A string. Name of y.
+dat_get_x <- function(dat, y_name) {
+  
+  # Exclude y and any non-numeric variables 
+  dat[which(names(dat) != y_name)] %>%
+    select(where(is.numeric))
+}
+
+# This returns the y vector.
+# dat: A data frame.
+# y_name: A string. Name of y.
+dat_get_y <- function(dat, y_name) {
+  dat[[y_name]]
+}
+
+# This returns a data frame of metrics.
+# train_dat: A data frame. The training data.
+# test_dat: A data frame. The test data.
+# y_name: A string. Name of y.
+# alpha: A double. Value of alpha.
+# lambda: A double vector. Values of lambda.
+# metric: A metric function produced by `yardstick::metric_set`.
+train_and_test_glmnet_mod <- function(train_dat, 
+                                      test_dat, 
+                                      y_name, 
+                                      alpha = 1, 
+                                      lambda = 10 ^ seq(-10, 0, length.out = 50), 
+                                      metric = metric_set(mae, rmse, mape)) {
+  
+  # Fit the model with training data
+  mod <- glmnet(x = dat_get_x(train_dat, y_name),
+                y = dat_get_y(train_dat, y_name),
+                alpha = alpha,
+                lambda = lambda)
+  
+  # Get the prediction with test data
+  pred <- predict(mod, newx = as.matrix(dat_get_x(test_dat, y_name))) %>%
+    as.data.frame() %>%
+    
+    # Attach the y column 
+    mutate(truth = dat_get_y(test_dat, y_name)) %>%
+    pivot_longer(-truth, names_to = "lambda", values_to = ".pred") %>%
+    mutate(lambda = as.integer(gsub("s", "", lambda)) + 1) %>%
+    mutate(lambda = lasso_mod$lambda[lambda])
+
+  # Evaluate the performance
+  pred %>%
+    group_by(lambda) %>%
+    metric(truth, .pred)
+}
+
+# This returns a data frame of metrics over many folds of data.
+# dat: A data frame.
+# y_name: A string. Name of y.
+# alpha: A double. Value of alpha.
+# lambda: A double vector. Values of lambda.
+# metric: A metric function produced by `yardstick::metric_set`.
+# v: An integer. Number of folds.
+cv_glmnet_mod <- function(dat, 
+                          y_name, 
+                          alpha = 1, 
+                          lambda = 10 ^ seq(-10, 0, length.out = 50), 
+                          metric = metric_set(mae, rmse, mape),
+                          v = 10L) {
+  
+  # Get CV folds
+  folds <- vfold_cv(dat, v = v)
+  
+  # Loop over folds along with their fold IDs
+  # map2 function allows you to get a pair of values,
+  # which in this case, a fold and its ID.
+  # check `help(map2_df)` for more details.
+  map2_df(folds$splits, folds$id, function(split, fold_id) {
+    
+    # Get the train and test data from the fold
+    fold_train <- training(split)
+    fold_test <- testing(split) 
+    
+    # Get the performance and add an ID column
+    train_and_test_glmnet_mod(fold_train,
+                              fold_test, 
+                              y_name, 
+                              alpha, 
+                              lambda,
+                              metric) %>%
+      mutate(fold_id = fold_id)
+  })
+}
+```
+
+We have $50 \times 3 \times 10 = 1500$ rows, because of $50$ lambda values, $3$ metrics and $10$ folds. 
+
+```{r}
+cv_lasso_result <- cv_glmnet_mod(hitters_train, y_name = "log_salary", alpha = 1, v = 10)
+cv_lasso_result
+```
+
+Take the average over 10 folds. Then find the optimal $\lambda$ based on the result.
+
+```{r}
+best_lasso_lambda <- cv_lasso_result %>%
+  group_by(lambda, .metric) %>%
+  summarise(mean = mean(.estimate)) %>%
+  group_by(.metric) %>%
+  filter(mean == min(mean))
+
+best_lasso_lambda
+```
+
+Use $\hat{\mu} \pm 1.96\hat{\sigma}$ to generate an approximate 95% CI.  
+
+```{r}
+cv_lasso_result %>%
+  group_by(lambda, .metric) %>%
+  summarise(mean = mean(.estimate), se = sd(.estimate)) %>%
+  ggplot() +
+  geom_line(aes(lambda, mean)) +
+  geom_point(data = best_lasso_lambda, 
+             aes(lambda, mean), col = "red") +
+  geom_errorbar(aes(lambda,
+                    mean,
+                    ymin = mean - 1.96 * se,
+                    ymax = mean + 1.96 * se)) +
+  scale_x_log10() +
+  facet_wrap(~.metric, scales = "free_y") +
+  theme_light()
+```
+
+Evaluate on the test set.
+
+```{r}
+hitters_test %>%
+  mutate(.pred = predict(lasso_mod,
+                         s = best_lasso_lambda$lambda[1], 
+                         newx = as.matrix(dat_get_x(hitters_test, "log_salary")))[1]) %>%
+  metric_set(mae, rmse, mape)(., log_salary, .pred)
+```
+
+## g.
+
+```{r}
+ridge_mod <- glmnet(x = hitters_train %>%
+                      select(-log_salary, -name),
+                    y = hitters_train$log_salary,
+                    alpha = 0,
+                    lambda = 10 ^ seq(-10, 0, length.out = 50))
+```
+
+
+Apply the same function for ridge regression by setting `alpha = 0`.
+
+```{r}
+cv_ridge_result <- cv_glmnet_mod(hitters_train, y_name = "log_salary", alpha = 0, v = 10)
+cv_ridge_result
+```
+
+Take the average over 10 folds. Then find the optimal $\lambda$ based on the result.
+
+```{r}
+best_ridge_lambda <- cv_ridge_result %>%
+  group_by(lambda, .metric) %>%
+  summarise(mean = mean(.estimate)) %>%
+  group_by(.metric) %>%
+  filter(mean == min(mean))
+
+best_ridge_lambda
+```
+
+Use $\hat{\mu} \pm 1.96\hat{\sigma}$ to generate an approximate 95% CI.  
+
+```{r}
+cv_ridge_result %>%
+  group_by(lambda, .metric) %>%
+  summarise(mean = mean(.estimate), se = sd(.estimate)) %>%
+  ggplot() +
+  geom_line(aes(lambda, mean)) +
+  geom_point(data = best_ridge_lambda, 
+             aes(lambda, mean), col = "red") +
+  geom_errorbar(aes(lambda,
+                    mean,
+                    ymin = mean - 1.96 * se,
+                    ymax = mean + 1.96 * se)) +
+  scale_x_log10() +
+  facet_wrap(~.metric, scales = "free_y") +
+  theme_light()
+```
+
+Evaluate on the test set. This ridge regression model is worse than the lasso regression model.
+
+```{r}
+hitters_test %>%
+  mutate(.pred = predict(ridge_mod,
+                         s = best_ridge_lambda$lambda[1], 
+                         newx = as.matrix(dat_get_x(hitters_test, "log_salary")))[1]) %>%
+  metric_set(mae, rmse, mape)(., log_salary, .pred)
+```
