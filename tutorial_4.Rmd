@@ -6,5 +6,19 @@ date: "2023-03-21"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
 ```
 
+```{r}
+flights_propensity <- data.frame(
+  record_id = 1:6,
+  actual = c("delayed", "ontime", "ontime", "delayed", "ontime", "delayed"), 
+  propensity_M1 = c(0.736, 0.815, 0.795, 0.840, 0.906, 0.773), 
+  propensity_M2 = c(0.632, 0.883, 0.872, 0.809, 0.861, 0.898))
+```
+
+```{r}
+flights_propensity %>%
+  mutate(predict_M1 = ifelse(propensity_M1 > 0.8, "ontime", "delayed")) %>%
+  mutate(predict_M2 = ifelse(propensity_M2 > 0.8, "ontime", "delayed"))
+```
