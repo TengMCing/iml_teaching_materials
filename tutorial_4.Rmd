@@ -53,5 +53,19 @@ glm(delay ~ ., family = binomial, data = flights_train)
 
 ```{r}
 library(glmnet)
+library(recipes)
+
+turn_cat_into_dummies <- recipe(delay ~ ., data = flights_train) %>% 
+  step_dummy(dayweek, carrier) %>% 
+  # all categorical variable so no need to standardise variables
+  prep() 
+
+flights_train_dummy <- bake(turn_cat_into_dummies, flights_train)
+
+glmnet(x = as.matrix(select(flights_train_dummy, -delay)),
+       y = flights_train_dummy$delay == "delayed",
+       family = binomial,
+       alpha = 1,
+       lambda = 10 ^ seq(-10, 0, length.out = 50))
 ```
 
