@@ -38,10 +38,10 @@ flights <- read_csv("https://emitanaka.org/iml/data/FlightDelays.csv") %>%
 split the data
 
 ```{r}
-library(tidyverse)
-flights <- read_csv("https://emitanaka.org/iml/data/FlightDelays.csv") %>%
-  select(carrier, dayweek, delay) %>% 
-  mutate(across(everything(), as.factor),
-         delay = relevel(delay, ref = "ontime"))
+library(rsample)
+set.seed(123)
+flights_split <- initial_split(flights, prop = 1500/nrow(flights))
+flights_train <- training(flights_split)
+flights_test <- testing(flights_split)
 ```
 
