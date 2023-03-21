@@ -45,3 +45,13 @@ flights_train <- training(flights_split)
 flights_test <- testing(flights_split)
 ```
 
+fit the glm
+
+```{r}
+glm(delay ~ ., family = binomial, data = flights_train)
+```
+
+```{r}
+library(glmnet)
+```
+
