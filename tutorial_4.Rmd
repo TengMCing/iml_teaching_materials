@@ -22,3 +22,16 @@ flights_propensity %>%
   mutate(predict_M1 = ifelse(propensity_M1 > 0.8, "ontime", "delayed")) %>%
   mutate(predict_M2 = ifelse(propensity_M2 > 0.8, "ontime", "delayed"))
 ```
+
+# c.
+
+load the data in
+
+```{r}
+library(tidyverse)
+flights <- read_csv("https://emitanaka.org/iml/data/FlightDelays.csv") %>%
+  select(carrier, dayweek, delay) %>% 
+  mutate(across(everything(), as.factor),
+         delay = relevel(delay, ref = "ontime"))
+```
+
