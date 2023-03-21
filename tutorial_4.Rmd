@@ -35,3 +35,13 @@ flights <- read_csv("https://emitanaka.org/iml/data/FlightDelays.csv") %>%
          delay = relevel(delay, ref = "ontime"))
 ```
 
+split the data
+
+```{r}
+library(tidyverse)
+flights <- read_csv("https://emitanaka.org/iml/data/FlightDelays.csv") %>%
+  select(carrier, dayweek, delay) %>% 
+  mutate(across(everything(), as.factor),
+         delay = relevel(delay, ref = "ontime"))
+```
+
