@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Tutorial 4"
 output: html_document
 date: "2023-03-21"
 ---
@@ -161,7 +161,9 @@ flights <- read_csv("https://emitanaka.org/iml/data/FlightDelays.csv") %>%
          delay = relevel(delay, ref = "ontime"))
 ```
 
-split the data
+b. 
+
+Split the data.
 
 ```{r}
 library(rsample)
@@ -171,11 +173,129 @@ flights_train <- training(flights_split)
 flights_test <- testing(flights_split)
 ```
 
-fit the glm
+c.
+
+Fit a glm.
 
 ```{r}
-glm(delay ~ ., family = binomial, data = flights_train)
+glm(delay ~ ., family = binomial, data = flights_train) %>%
+  summary()
 ```
+
+e.
+
+I reuse the function from last week. There are some minor adjustments to these functions.
+
+```{r}
+# This returns the x data frame.
+# dat: A data frame.
+# y_name: A string. Name of y.
+dat_get_x <- function(dat, y_name) {
+  
+  # Exclude y and any non-numeric variables 
+  dat[which(names(dat) != y_name)] %>%
+    select(where(is.numeric))
+}
+
+# This returns the y vector.
+# dat: A data frame.
+# y_name: A string. Name of y.
+dat_get_y <- function(dat, y_name) {
+  dat[[y_name]]
+}
+
+# This returns a data frame of metrics.
+# train_dat: A data frame. The training data.
+# test_dat: A data frame. The test data.
+# y_name: A string. Name of y.
+# alpha: A double. Value of alpha.
+# lambda: A double vector. Values of lambda.
+# metric: A metric function produced by `yardstick::metric_set`.
+train_and_test_glmnet_mod <- function(train_dat, 
+                                      test_dat, 
+                                      y_name, 
+                                      alpha = 1, 
+                                      lambda = 10 ^ seq(-10, 0, length.out = 50), 
+                                      metric = metric_set(mae, rmse, mape)) {
+  
+  # Fit the model with training data
+  mod <- glmnet(x = as.matrix(dat_get_x(train_dat, y_name)),
+                y = dat_get_y(train_dat, y_name),
+                alpha = alpha,
+                lambda = lambda,
+                family = "binomial")
+  
+  # Get the prediction with test data
+  pred <- predict(mod, 
+                  newx = as.matrix(dat_get_x(test_dat, y_name)),
+                  type = "response") %>%
+    as.data.frame() %>%
+    
+    # Attach the y column 
+    mutate(truth = dat_get_y(test_dat, y_name)) %>%
+    pivot_longer(-truth, names_to = "lambda", values_to = ".pred") %>%
+    mutate(lambda = as.integer(gsub("s", "", lambda)) + 1) %>%
+    mutate(lambda = mod$lambda[lambda]) %>%
+    
+    # The type = "response" will give the prediction for the second class which is "delay",
+    # we need to convert it to the probability of "ontime"
+    mutate(.pred = 1- .pred) %>%
+    
+    # We also need class prediction
+    mutate(.pred_class = levels(dat_get_y(train_dat, y_name))[ifelse(.pred > 0.5, 1, 2)]) %>%
+    mutate(.pred_class = factor(.pred_class, levels = levels(dat_get_y(train_dat, y_name))))
+
+  # Evaluate the performance
+  pred %>%
+    group_by(lambda) %>%
+    
+    # Because some metrics ask for probability and some ask for class labels
+    # we need to provide the probability in the second argument and
+    # the class via the named argument
+    metric(truth = truth, .pred, estimate = .pred_class)
+}
+
+# This returns a data frame of metrics over many folds of data.
+# dat: A data frame.
+# y_name: A string. Name of y.
+# alpha: A double. Value of alpha.
+# lambda: A double vector. Values of lambda.
+# metric: A metric function produced by `yardstick::metric_set`.
+# v: An integer. Number of folds.
+cv_glmnet_mod <- function(dat, 
+                          y_name, 
+                          alpha = 1, 
+                          lambda = 10 ^ seq(-10, 0, length.out = 50), 
+                          metric = metric_set(mae, rmse, mape),
+                          v = 10L) {
+  
+  # Get CV folds
+  folds <- vfold_cv(dat, v = v)
+  
+  # Loop over folds along with their fold IDs
+  # map2 function allows you to get a pair of values,
+  # which in this case, a fold and its ID.
+  # check `help(map2_df)` for more details.
+  map2_df(folds$splits, folds$id, function(split, fold_id) {
+    
+    # Get the train and test data from the fold
+    fold_train <- training(split)
+    fold_test <- testing(split) 
+    
+    # Get the performance and add an ID column
+    train_and_test_glmnet_mod(fold_train,
+                              fold_test, 
+                              y_name, 
+                              alpha, 
+                              lambda,
+                              metric) %>%
+      mutate(fold_id = fold_id)
+  })
+}
+```
+
+
+In data preprocessing, we turn categorical variables into dummy variables, and turn the response variable into a logical (boolean) variable.
 
 ```{r}
 library(glmnet)
@@ -183,15 +303,80 @@ library(recipes)
 
 turn_cat_into_dummies <- recipe(delay ~ ., data = flights_train) %>% 
   step_dummy(dayweek, carrier) %>% 
-  # all categorical variable so no need to standardise variables
   prep() 
 
-flights_train_dummy <- bake(turn_cat_into_dummies, flights_train)
+flights_train_baked <- bake(turn_cat_into_dummies, flights_train)
 
-glmnet(x = as.matrix(select(flights_train_dummy, -delay)),
-       y = flights_train_dummy$delay == "delayed",
-       family = binomial,
-       alpha = 1,
-       lambda = 10 ^ seq(-10, 0, length.out = 50))
+cv_result <- cv_glmnet_mod(flights_train_baked, 
+                           "delay", 
+                           metric = metric_set(bal_accuracy, kap, accuracy, roc_auc, pr_auc))
+```
+
+```{r}
+cv_result %>%
+  group_by(lambda, .metric) %>%
+  summarise(mean = mean(.estimate)) %>%
+  group_by(.metric) %>%
+  filter(mean == min(mean))
+```
+
+The result looks very weird. The `roc_auc` suggests `lambda <= 0.01` 
+
+```{r}
+cv_result %>%
+  group_by(lambda, .metric) %>%
+  summarise(mean = mean(.estimate)) %>%
+  ggplot() +
+  geom_line(aes(log(lambda), mean)) +
+  facet_wrap(~.metric)
+```
+
+Let's have a look at the result produced by `cv.glmnet`. It looks quite similar to our result.
+
+```{r}
+cv.glmnet(x = as.matrix(dat_get_x(flights_train_baked, "delay")),
+          y = dat_get_y(flights_train_baked, "delay"),
+          type.measure = "auc",
+          family = "binomial") %>%
+  plot()
+```
+
+Pick the one with lowest `auc`.
+
+```{r}
+best_lambda <- cv_result %>%
+  group_by(lambda, .metric) %>%
+  summarise(mean = mean(.estimate)) %>%
+  ungroup() %>%
+  filter(.metric == "roc_auc") %>%
+  filter(mean == max(mean))
+
+best_lambda
+```
+
+f.
+
+The logistic regression is better the lasso logistic regression in terms of AUC.
+
+```{r}
+glm(delay ~ ., family = binomial, data = flights_train) %>%
+  
+  # This predict the probability of delay, we need to convert it to probability of ontime
+  predict(type = "response", newdata = flights_test) %>%
+  {roc_auc_vec(truth = flights_test$delay, estimate = 1 - .)}
+```
+
+```{r}
+flights_test_baked <- bake(turn_cat_into_dummies, flights_test)
+
+glmnet(as.matrix(dat_get_x(flights_train_baked, "delay")),
+       dat_get_y(flights_train_baked, "delay"),
+       family = "binomial",
+       lambda = best_lambda$mean[1]) %>%
+  
+  # This predict the probability of delay, we need to convert it to probability of ontime
+  predict(type = "response", newx = as.matrix(dat_get_x(flights_test_baked, "delay"))) %>%
+  c() %>%
+  {roc_auc_vec(truth = flights_test$delay, estimate = 1 - .)}
 ```
 
