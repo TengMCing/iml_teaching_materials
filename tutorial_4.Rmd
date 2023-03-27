@@ -22,15 +22,136 @@ flights_propensity <- data.frame(
   propensity_M2 = c(0.632, 0.883, 0.872, 0.809, 0.861, 0.898))
 ```
 
+a.
+
 ```{r}
 flights_propensity %>%
   mutate(predict_M1 = ifelse(propensity_M1 > 0.8, "ontime", "delayed")) %>%
   mutate(predict_M2 = ifelse(propensity_M2 > 0.8, "ontime", "delayed"))
 ```
 
-# c.
+Use a cutoff of 0.8.
 
-load the data in
+There are four cases we need to consider:
+
+- True positive: The prediction "ontime" is correct.
+- False positive: The prediction "ontime" is incorrect.
+
+- True negative: The prediction "delayed" is correct.
+- False negative: The prediction "delayed" is incorrect.
+
+These four cases can be represented by a 2-bit binary number.
+
+- 00: `actual != "ontime"` and `predict != "ontime"`
+- 01: `actual != "ontime"` and `predict == "ontime"`
+- 10: `actual == "ontime"` and `predict != "ontime"`
+- 11: `actual == "ontime"` and `predict == "ontime"`
+
+To convert this binary number back to a decimal number, we can simply double the first digit, then add the second digit.
+
+- 00: $0 \times 2 + 0 = 0$
+- 01: $0 \times 2 + 1 = 1$
+- 10: $1 \times 2 + 0 = 2$
+- 11: $1 \times 2 + 1 = 3$
+
+Now we have a mapping from a 2-bit binary number to a case 
+
+- 00 -> 0 -> True negative
+- 01 -> 1 -> False positive
+- 10 -> 2 -> False Negative
+- 11 -> 3 -> True positive
+
+Since `R` only supports index starting from `1` instead of `0`. We have to increment the decimal number by one to create a new mapping
+
+- 0 + 1 = 1 -> True negative
+- 1 + 1 = 2 -> False positive
+- 2 + 1 = 3 -> False Negative
+- 3 + 1 = 4 -> True positive
+
+This sounds complicated, but the code is actual very simple.
+
+- The result of `actual == "ontime"` and `predict_M1 == "ontime"` can be considered as a 2-bit binary number conceptually.
+- `(actual == "ontime") * 2 + (predict_M1 == "ontime")` converts the binary number to a decimal number.
+- `... + 1` increments the decimal number by one.
+- `c("TN", "FP", "FN", "TP")[...]` provide the mapping from a decimal number to a case.
+
+```{r}
+flights_propensity %>%
+  mutate(predict_M1 = ifelse(propensity_M1 > 0.8, "ontime", "delayed")) %>%
+  mutate(predict_M2 = ifelse(propensity_M2 > 0.8, "ontime", "delayed")) %>%
+  select(-propensity_M1, -propensity_M2) %>%
+  mutate(M1 = c("TN", "FP", "FN", "TP")[(actual == "ontime") * 2 + (predict_M1 == "ontime") + 1]) %>%
+  mutate(M2 = c("TN", "FP", "FN", "TP")[(actual == "ontime") * 2 + (predict_M2 == "ontime") + 1]) %>%
+  pivot_longer(M1:M2, names_to = "model", values_to = "case") %>%
+  group_by(model) %>%
+  summarise(accuracy = (sum(case == "TP") + sum(case == "TN")) / n())
+```
+
+b.
+
+```{r}
+flights_propensity %>%
+  mutate(predict_M1 = ifelse(propensity_M1 > 0.8, "ontime", "delayed")) %>%
+  mutate(predict_M2 = ifelse(propensity_M2 > 0.8, "ontime", "delayed")) %>%
+  select(-propensity_M1, -propensity_M2) %>%
+  mutate(M1 = c("TN", "FP", "FN", "TP")[(actual == "ontime") * 2 + (predict_M1 == "ontime") + 1]) %>%
+  mutate(M2 = c("TN", "FP", "FN", "TP")[(actual == "ontime") * 2 + (predict_M2 == "ontime") + 1]) %>%
+  pivot_longer(M1:M2, names_to = "model", values_to = "case") %>%
+  group_by(model) %>%
+  summarise(TPR = sum(case == "TP") / (sum(case == "TP") + sum(case == "FN")),
+            FPR = sum(case == "FP") / (sum(case == "FP") + sum(case == "TN")))
+```
+
+c.
+
+Use 0.85 as the cutoff value.
+
+```{r}
+flights_propensity %>%
+  mutate(predict_M1 = ifelse(propensity_M1 > 0.85, "ontime", "delayed")) %>%
+  mutate(predict_M2 = ifelse(propensity_M2 > 0.85, "ontime", "delayed")) %>%
+  select(-propensity_M1, -propensity_M2) %>%
+  mutate(M1 = c("TN", "FP", "FN", "TP")[(actual == "ontime") * 2 + (predict_M1 == "ontime") + 1]) %>%
+  mutate(M2 = c("TN", "FP", "FN", "TP")[(actual == "ontime") * 2 + (predict_M2 == "ontime") + 1]) %>%
+  pivot_longer(M1:M2, names_to = "model", values_to = "case") %>%
+  group_by(model) %>%
+  summarise(TPR = sum(case == "TP") / (sum(case == "TP") + sum(case == "FN")),
+            FPR = sum(case == "FP") / (sum(case == "FP") + sum(case == "TN")))
+```
+
+d.
+
+The first one is given by the solution.
+
+```{r}
+library(yardstick)
+flights_propensity %>% 
+  pivot_longer(propensity_M1:propensity_M2, names_to = "model", values_to = "propensity") %>%
+  group_by(model) %>% 
+  mutate(actual = as.factor(actual)) %>% 
+  roc_curve(actual, propensity) %>% 
+  autoplot()
+```
+
+
+Let's try to use "delayed" as the positive case. Now the ROC curves make more sense and M1 is better than M2.
+
+```{r}
+flights_propensity %>% 
+  pivot_longer(propensity_M1:propensity_M2, names_to = "model", values_to = "propensity") %>%
+  mutate(propensity = 1 - propensity) %>%
+  group_by(model) %>% 
+  mutate(actual = as.factor(actual)) %>% 
+  roc_curve(actual, propensity) %>% 
+  autoplot()
+```
+
+
+# 4C
+
+a.
+
+Load the data.
 
 ```{r}
 library(tidyverse)
