@@ -9,6 +9,11 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 ```
 
+# 4B
+
+In the tutorial instruction, it is unclear which one is positive and which one is negative case. By looking at the solution,
+we can deduce that positive is "ontime" and negative is "delayed".
+
 ```{r}
 flights_propensity <- data.frame(
   record_id = 1:6,
