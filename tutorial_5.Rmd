@@ -1,0 +1,60 @@
+---
+title: "tutorial_5"
+output: html_document
+date: "2023-03-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 5D
+
+```{r}
+set.seed(2023)
+library(rsample)
+library(tidyverse)
+comscore <- read_csv("https://emitanaka.org/iml/data/comscore.csv")
+comscore_split <- initial_split(comscore, prop = 0.8)
+```
+
+```{r}
+library(rpart)
+min_obs_tree <- rpart(Buy ~ Duration + PageViews,
+                      data = training(comscore_split),
+                      method = "class",
+                      minsplit = 10,
+                      cp = 0.005)
+library(rpart.plot)
+rpart.plot(min_obs_tree)
+```
+
+
+```{r}
+set.seed(144)
+tree_cp0 <- rpart(Buy ~ Duration + PageViews,
+                  data = training(comscore_split),
+                  method = "class",
+                  cp = 0)
+tree_cp0$cptable
+```
+
+
+```{r}
+tree_cp0$cptable %>%
+  as.data.frame() %>%
+  filter(xerror == min(xerror)) %>%
+  pull(CP) %>%
+  .[1]
+  
+prune(tree_cp0, 
+      cp = tree_cp0$cptable[which.min(tree_cp0$cptable[,4]), 1]) %>%
+  rpart.plot()
+```
+
+
+
+
+
+
+

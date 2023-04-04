@@ -1,0 +1,47 @@
+---
+title: "tutorial_6"
+output: html_document
+date: "2023-04-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 6A
+
+a. 
+
+```{r}
+library(tidyverse)
+boston <- read_csv("https://emitanaka.org/iml/data/boston.csv")
+```
+
+```{r}
+library(rsample)
+set.seed(123) # For reproducibility
+boston_split <- initial_split(boston, prop = 3/4)
+```
+
+b.
+
+```{r}
+library(rpart)
+reg_tree <- rpart(MEDV ~.,
+                  data = training(boston_split),
+                  minsplit = 5,
+                  cp = 0.001,
+                  method = "anova")
+best_tree <- prune(reg_tree, 
+                   cp = reg_tree$cptable %>%
+                     as_tibble() %>%
+                     filter(xerror == min(xerror)) %>%
+                     .$CP)
+rpart.plot::rpart.plot(best_tree)
+```
+c.
+
+```{r}
+ranger::
+```
+
