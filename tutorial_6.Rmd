@@ -119,3 +119,37 @@ gplot <- ggplot(notsouth_pt, aes(linoleic, arachidic)) +
 gplot
 ```
 
+```{r}
+notsouth_ts_pred <- testing(notsouth_split) %>%
+  mutate(.pred = ifelse(predict(notsouth_tree, .)[, "2"], "2", "3"),
+         .pred = factor(.pred))
+
+yardstick::bal_accuracy(notsouth_ts_pred, region, .pred)
+```
+
+
+b.
+
+```{r}
+library(ranger)
+library(yardstick)
+notsouth_rf <- ranger(region ~ . , 
+                      data = training(notsouth_split),
+                      importance = "impurity",
+                      classification = TRUE)
+
+notsouth_prf  <- notsouth_pt %>%
+  mutate(.pred = predict(notsouth_rf, .)$predictions)
+
+gplot %+% notsouth_prf +
+  labs(title = "Random forest")
+```
+
+```{r}
+notsouth_ts_pred_rf <- testing(notsouth_split) %>%
+  mutate(.pred = predict(notsouth_rf, .)$predictions,
+         .pred = factor(.pred))
+
+bal_accuracy(notsouth_ts_pred_rf, region, .pred)
+```
+
