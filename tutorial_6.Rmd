@@ -82,3 +82,40 @@ boost_best_mod <- gbm(MEDV ~ .,
     )
 ```
 
+# 6B
+
+a. 
+
+```{r}
+olive <- read_csv("http://emitanaka.org/iml/data/olive.csv")
+
+library(rsample)
+library(rpart)
+notsouth <- olive %>%
+  filter(region != 1) %>%
+  select(region, linoleic, arachidic) %>%
+  mutate(region = factor(region))
+
+set.seed(2021)
+notsouth_split <- initial_split(notsouth, prop = 2/3, strata = region)
+
+notsouth_tree <- rpart(region ~ ., 
+                       data = training(notsouth_split), 
+                       method = "class")
+
+notsouth_pt <- expand_grid(linoleic = seq(440, 1500, 10), 
+                           arachidic = seq(0, 105, 2)) %>%
+  mutate(.pred = ifelse(predict(notsouth_tree, .)[, "2"], "2", "3"))
+
+gplot <- ggplot(notsouth_pt, aes(linoleic, arachidic)) +
+  geom_point(aes(color = .pred), alpha=0.1) +
+  geom_point(data = notsouth,
+             aes(color = region, shape = region)) +
+  colorspace::scale_color_discrete_qualitative() +
+  theme(aspect.ratio = 1) +
+  labs(title = "Decision tree", color = "Region") +
+  guides(shape = "none")
+
+gplot
+```
+
