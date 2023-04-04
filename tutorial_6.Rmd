@@ -41,7 +41,44 @@ rpart.plot::rpart.plot(best_tree)
 ```
 c.
 
+
 ```{r}
-ranger::
+library(ranger)
+rf_mod <- ranger(MEDV ~ .,
+                 data = training(boston_split),
+                 num.trees = 300,
+                 mtry = 5,
+                 importance = "impurity")
+```
+
+d.
+
+```{r}
+library(gbm)
+boost_mod <- gbm(MEDV ~ .,
+    data = training(boston_split),
+    distribution = "gaussian",
+    n.trees = 1000,
+    shrinkage = 0.05,
+    interaction.depth = 1,
+    cv.folds = 10,
+    verbose = TRUE
+    )
+```
+
+```{r}
+best_n_steps <- gbm.perf(boost_mod)
+```
+
+```{r}
+boost_best_mod <- gbm(MEDV ~ .,
+    data = training(boston_split),
+    distribution = "gaussian",
+    n.trees = best_n_steps,
+    shrinkage = 0.05,
+    interaction.depth = 1,
+    cv.folds = 10,
+    verbose = TRUE
+    )
 ```
 
